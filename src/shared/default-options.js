@@ -6,6 +6,7 @@ const defaultOptions = {
   codeBlockStyle: "fenced",
   fence: "```",
   preserveCodeFormatting: false,
+  autoDetectCodeLanguage: true,
   emDelimiter: "_",
   strongDelimiter: "**",
   linkStyle: "inlined",
@@ -18,7 +19,7 @@ const defaultOptions = {
     prettyPrint: true,
     centerText: true
   },
-  frontmatter: "---\ncreated: {date:YYYY-MM-DDTHH:mm:ss} (UTC {date:Z})\ntags: [{keywords}]\nsource: {baseURI}\nauthor: {byline}\n---\n\n# {pageTitle}\n\n> ## Excerpt\n> {excerpt}\n\n---",
+  frontmatter: "---\ncreated: {date:YYYY-MM-DDTHH:mm:ss} (UTC {date:Z})\ntags: [{keywords}]\nsource: {pageURL}\nauthor: {byline}\n---\n\n# {pageTitle}\n\n> ## Excerpt\n> {excerpt}\n\n---",
   backmatter: "",
   title: "{pageTitle}",
   includeTemplate: false,
@@ -28,11 +29,40 @@ const defaultOptions = {
   mdClipsFolder: null,
   disallowedChars: '[]#^',
   downloadMode: 'downloadsApi',
+  defaultExportType: 'markdown',
   turndownEscape: true,
+  hashtagHandling: 'keep',
   contextMenus: true,
+  batchProcessingEnabled: true,
   obsidianIntegration: false,
   obsidianVault: "",
   obsidianFolder: "",
+  popupTheme: 'system',
+  specialTheme: 'none',
+  specialThemeIcon: true,
+  popupAccent: 'sage',
+  compactMode: false,
+  showUserGuideIcon: true,
+  editorTheme: 'default',
+  siteRules: [],
+}
+
+const LEGACY_DEFAULT_FRONTMATTER = "---\ncreated: {date:YYYY-MM-DDTHH:mm:ss} (UTC {date:Z})\ntags: [{keywords}]\nsource: {baseURI}\nauthor: {byline}\n---\n\n# {pageTitle}\n\n> ## Excerpt\n> {excerpt}\n\n---";
+
+function getSiteRulesApi() {
+  if (globalThis.markSnipSiteRules) {
+    return globalThis.markSnipSiteRules;
+  }
+
+  if (typeof require === 'function') {
+    try {
+      return require('./site-rules');
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
 }
 
 // function to get the options from storage and substitute default options if it fails
@@ -42,6 +72,15 @@ async function getOptions() {
     options = await browser.storage.sync.get(defaultOptions);
   } catch (err) {
     console.error(err);
+  }
+  if (options.frontmatter === LEGACY_DEFAULT_FRONTMATTER) {
+    options.frontmatter = defaultOptions.frontmatter;
+  }
+  const siteRulesApi = getSiteRulesApi();
+  if (siteRulesApi?.normalizeSiteRules) {
+    options.siteRules = siteRulesApi.normalizeSiteRules(options.siteRules);
+  } else if (!Array.isArray(options.siteRules)) {
+    options.siteRules = [];
   }
   if (!browser.downloads) options.downloadMode = 'contentLink';
   return options;

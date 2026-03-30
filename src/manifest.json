@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "MarkSnip - Markdown Web Clipper",
-  "version": "4.0.0",
+  "version": "4.3.0",
   "author": "Dhruv Parikh",
-  "description": "A web clipper to download articles in markdown format. Turndown & Readability are used as core libraries.",
+  "description": "One-click Markdown web clipper. Save articles, docs, code & tables as clean Markdown for AI agents & LLMs. Supports Obsidian & more.",
   "icons": {
     "16": "icons/favicon-16x16.png",
     "32": "icons/favicon-32x32.png",
@@ -20,6 +20,9 @@
     "clipboardWrite",
     "scripting",
     "offscreen"
+  ],
+  "optional_permissions": [
+    "nativeMessaging"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -40,7 +43,7 @@
   "options_ui": {
     "page": "options/options.html",
     "browser_style": false,
-    "open_in_tab": false
+    "open_in_tab": true
   },
   "commands": {
     "_execute_action": {
@@ -83,12 +86,19 @@
     {
       "resources": ["contentScript/pageContext.js"],
       "matches": ["<all_urls>"]
+    },
+    {
+      "resources": ["guide/guide.html"],
+      "matches": ["<all_urls>"]
     }
   ],
   "browser_specific_settings": {
     "gecko": {
-      "id": "{1c5e4c6f-5530-49a3-b216-31ce7d744db0}",
-      "strict_min_version": "65.0"
+      "id": "marksnip@dhruvparikh",
+      "strict_min_version": "121.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
     }
   }
 }

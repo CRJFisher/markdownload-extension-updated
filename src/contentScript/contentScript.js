@@ -4,71 +4,83 @@ function notifyExtension() {
 }
 
 function getHTMLOfDocument() {
+    const clonedDocument = document.implementation.createHTMLDocument('');
+    const clonedHtml = document.documentElement.cloneNode(true);
+    clonedDocument.replaceChild(clonedHtml, clonedDocument.documentElement);
+
     // make sure a title tag exists so that pageTitle is not empty and
-    // a filename can be genarated.
-    if (document.head.getElementsByTagName('title').length == 0) {
-        let titleEl = document.createElement('title');
-        // prepate a good default text (the text displayed in the window title)
+    // a filename can be generated.
+    if (clonedDocument.head.getElementsByTagName('title').length === 0) {
+        const titleEl = clonedDocument.createElement('title');
+        // prepare a good default text (the text displayed in the window title)
         titleEl.innerText = document.title;
-        document.head.append(titleEl);
+        clonedDocument.head.append(titleEl);
     }
 
     // if the document doesn't have a "base" element make one
     // this allows the DOM parser in future steps to fix relative uris
-
-    let baseEls = document.head.getElementsByTagName('base');
+    const baseEls = clonedDocument.head.getElementsByTagName('base');
     let baseEl;
 
     if (baseEls.length > 0) {
         baseEl = baseEls[0];
     } else {
-        baseEl = document.createElement('base');
-        document.head.append(baseEl);
+        baseEl = clonedDocument.createElement('base');
+        clonedDocument.head.append(baseEl);
     }
 
-    // make sure the 'base' element always has a good 'href`
+    // make sure the 'base' element always has a good 'href'
     // attribute so that the DOMParser generates usable
     // baseURI and documentURI properties when used in the
     // background context.
-
-    let href = baseEl.getAttribute('href');
+    const href = baseEl.getAttribute('href');
 
     if (!href || !href.startsWith(window.location.origin)) {
         baseEl.setAttribute('href', window.location.href);
     }
 
-    // remove the hidden content from the page
-    removeHiddenNodes(document.body);
+    // remove hidden content from the cloned page only
+    if (document.body && clonedDocument.body) {
+        removeHiddenNodes(document.body, clonedDocument.body);
+    }
 
-    // get the content of the page as a string
-    return document.documentElement.outerHTML;
+    // get the cloned page content as a string
+    return clonedDocument.documentElement.outerHTML;
 }
 
 // code taken from here: https://www.reddit.com/r/javascript/comments/27bcao/anyone_have_a_method_for_finding_all_the_hidden/
-function removeHiddenNodes(root) {
-    let nodeIterator, node,i = 0;
+function removeHiddenNodes(sourceRoot, clonedRoot) {
+    const sourceChildren = Array.from(sourceRoot.children || []);
+    const clonedChildren = Array.from(clonedRoot.children || []);
 
-    nodeIterator = document.createNodeIterator(root, NodeFilter.SHOW_ELEMENT, function(node) {
-      let nodeName = node.nodeName.toLowerCase();
-      if (nodeName === "script" || nodeName === "style" || nodeName === "noscript" || nodeName === "math") {
-        return NodeFilter.FILTER_REJECT;
-      }
-      if (node.offsetParent === void 0) {
-        return NodeFilter.FILTER_ACCEPT;
-      }
-      let computedStyle = window.getComputedStyle(node, null);
-      if (computedStyle.getPropertyValue("visibility") === "hidden" || computedStyle.getPropertyValue("display") === "none") {
-        return NodeFilter.FILTER_ACCEPT;
-      }
-    });
+    for (let i = sourceChildren.length - 1; i >= 0; i--) {
+        const sourceChild = sourceChildren[i];
+        const clonedChild = clonedChildren[i];
+        if (!sourceChild || !clonedChild) {
+            continue;
+        }
 
-    while ((node = nodeIterator.nextNode()) && ++i) {
-      if (node.parentNode instanceof HTMLElement) {
-        node.parentNode.removeChild(node);
-      }
+        const nodeName = sourceChild.nodeName.toLowerCase();
+        if (nodeName === "script" || nodeName === "style" || nodeName === "noscript" || nodeName === "math") {
+            continue;
+        }
+
+        if (sourceChild.offsetParent === void 0) {
+            clonedChild.remove();
+            continue;
+        }
+
+        const computedStyle = window.getComputedStyle(sourceChild, null);
+        if (computedStyle.getPropertyValue("visibility") === "hidden" || computedStyle.getPropertyValue("display") === "none") {
+            clonedChild.remove();
+            continue;
+        }
+
+        removeHiddenNodes(sourceChild, clonedChild);
     }
-    return root
-  }
+
+    return clonedRoot;
+}
 
 // code taken from here: https://stackoverflow.com/a/5084044/304786
 function getHTMLOfSelection() {
@@ -81,7 +93,7 @@ function getHTMLOfSelection() {
         if (selection.rangeCount > 0) {
             let content = '';
             for (let i = 0; i < selection.rangeCount; i++) {
-                range = selection.getRangeAt(0);
+                range = selection.getRangeAt(i);
                 var clonedSelection = range.cloneContents();
                 var div = document.createElement('div');
                 div.appendChild(clonedSelection);
@@ -93,6 +105,181 @@ function getHTMLOfSelection() {
         }
     } else {
         return '';
+	}
+}
+
+if (typeof window.marksnipCaptureState === 'undefined') {
+    window.marksnipCaptureState = {
+        pageContextLoadPromise: null,
+        pageContextScriptLoaded: false,
+        pageContextScriptFailed: false,
+        lastPageContextFailureAt: 0,
+        pageContextRetryCooldownMs: 5000,
+        latexAttrName: 'marksnip-latex',
+        mathJaxSyncEventName: 'marksnip:mathjax-sync',
+        mathJaxSyncRequestEventName: 'marksnip:mathjax-sync-request'
+    };
+}
+
+function hasRenderedMathJaxNodes() {
+    return !!document.querySelector('mjx-container, .MathJax, script[id^="MathJax-Element-"]');
+}
+
+function hasLatexTaggedMath() {
+    return !!document.querySelector(`[${window.marksnipCaptureState.latexAttrName}]`);
+}
+
+function requestMathJaxSyncFromPageContext() {
+    try {
+        window.dispatchEvent(new CustomEvent(window.marksnipCaptureState.mathJaxSyncRequestEventName));
+    } catch (error) {
+        // Ignore event dispatch failures across contexts.
+    }
+}
+
+function loadPageContextScript() {
+    if (window.marksnipCaptureState.pageContextScriptLoaded) {
+        return Promise.resolve(true);
+    }
+
+    if (window.marksnipCaptureState.pageContextScriptFailed) {
+        const elapsedSinceFailure = Date.now() - window.marksnipCaptureState.lastPageContextFailureAt;
+        if (elapsedSinceFailure < window.marksnipCaptureState.pageContextRetryCooldownMs) {
+            return Promise.resolve(false);
+        }
+        window.marksnipCaptureState.pageContextScriptFailed = false;
+    }
+
+    if (window.marksnipCaptureState.pageContextLoadPromise) {
+        return window.marksnipCaptureState.pageContextLoadPromise;
+    }
+
+    if (typeof browser === 'undefined' || !browser.runtime?.getURL) {
+        return Promise.resolve(false);
+    }
+
+    window.marksnipCaptureState.pageContextLoadPromise = new Promise((resolve) => {
+        let settled = false;
+        const settle = (value) => {
+            if (settled) {
+                return;
+            }
+            settled = true;
+            if (!value) {
+                // Allow retries on later captures.
+                window.marksnipCaptureState.pageContextLoadPromise = null;
+            }
+            resolve(value);
+        };
+
+        const existingScript = document.querySelector('script[data-marksnip-page-context="true"]');
+        if (existingScript) {
+            if (existingScript.getAttribute('data-marksnip-page-context-loaded') === 'true') {
+                window.marksnipCaptureState.pageContextScriptLoaded = true;
+                settle(true);
+                return;
+            }
+
+            if (existingScript.getAttribute('data-marksnip-page-context-failed') === 'true') {
+                settle(false);
+                return;
+            }
+
+            existingScript.addEventListener('load', () => {
+                window.marksnipCaptureState.pageContextScriptLoaded = true;
+                settle(true);
+            }, { once: true });
+            existingScript.addEventListener('error', () => {
+                window.marksnipCaptureState.pageContextScriptFailed = true;
+                window.marksnipCaptureState.lastPageContextFailureAt = Date.now();
+                settle(false);
+            }, { once: true });
+
+            setTimeout(() => settle(false), 1000);
+            return;
+        }
+
+        var script = document.createElement('script');
+        script.src = browser.runtime.getURL('contentScript/pageContext.js');
+        script.setAttribute('data-marksnip-page-context', 'true');
+        script.onload = () => {
+            window.marksnipCaptureState.pageContextScriptLoaded = true;
+            window.marksnipCaptureState.pageContextScriptFailed = false;
+            script.setAttribute('data-marksnip-page-context-loaded', 'true');
+            settle(true);
+        };
+        script.onerror = () => {
+            window.marksnipCaptureState.pageContextScriptFailed = true;
+            window.marksnipCaptureState.lastPageContextFailureAt = Date.now();
+            script.setAttribute('data-marksnip-page-context-failed', 'true');
+            settle(false);
+        };
+
+        setTimeout(() => {
+            if (!window.marksnipCaptureState.pageContextScriptLoaded) {
+                settle(false);
+            }
+        }, 1000);
+
+        (document.head || document.documentElement).appendChild(script);
+    });
+
+    return window.marksnipCaptureState.pageContextLoadPromise;
+}
+
+function delay(milliseconds) {
+    return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+
+async function waitForMathJaxLatexTagging(timeoutMs = 1400, pollIntervalMs = 70) {
+    if (hasLatexTaggedMath()) {
+        return true;
+    }
+
+    if (!hasRenderedMathJaxNodes()) {
+        return false;
+    }
+
+    let syncedAtLeastOnce = false;
+    const syncListener = () => {
+        syncedAtLeastOnce = true;
+    };
+
+    window.addEventListener(window.marksnipCaptureState.mathJaxSyncEventName, syncListener);
+
+    try {
+        const startedAt = Date.now();
+        while (Date.now() - startedAt < timeoutMs) {
+            requestMathJaxSyncFromPageContext();
+            await delay(pollIntervalMs);
+
+            if (hasLatexTaggedMath()) {
+                return true;
+            }
+
+            // If we got a sync event and there are still no rendered MathJax nodes,
+            // there is nothing to wait on for this capture pass.
+            if (syncedAtLeastOnce && !hasRenderedMathJaxNodes()) {
+                break;
+            }
+        }
+    } finally {
+        window.removeEventListener(window.marksnipCaptureState.mathJaxSyncEventName, syncListener);
+    }
+
+    return hasLatexTaggedMath();
+}
+
+async function marksnipPrepareForCapture() {
+    try {
+        if (!hasRenderedMathJaxNodes() && !hasLatexTaggedMath()) {
+            return;
+        }
+
+        await loadPageContextScript();
+        await waitForMathJaxLatexTagging();
+    } catch (error) {
+        console.debug('marksnipPrepareForCapture failed:', error);
     }
 }
 
@@ -108,7 +295,8 @@ function getSelectionAndDom() {
       
       return {
         selection: selection,
-        dom: dom
+        dom: dom,
+        pageUrl: window.location.href
       };
     } catch (error) {
       console.error('Error in getSelectionAndDom:', error);
@@ -188,11 +376,7 @@ function downloadImage(filename, url) {
     */
 }
 
-(function loadPageContextScript(){
-    var s = document.createElement('script');
-    s.src = browser.runtime.getURL('contentScript/pageContext.js');
-    (document.head||document.documentElement).appendChild(s);
-})()
+loadPageContextScript();
 
 // ===== Link Picker Feature =====
 
@@ -220,7 +404,15 @@ if (!window.linkPickerMessageListenerAdded) {
     window.linkPickerMessageListenerAdded = true;
 }
 
-function initLinkPickerMode() {
+const ACCENT_COLORS = {
+    sage:  { dark: '#56735A', darker: '#3F5441', base: '#6B8E6F' },
+    ocean: { dark: '#4A7A92', darker: '#385D6F', base: '#5B8FA8' },
+    slate: { dark: '#56657A', darker: '#414D5C', base: '#6B7B8E' },
+    rose:  { dark: '#965C5C', darker: '#7A4A4A', base: '#B07070' },
+    amber: { dark: '#967840', darker: '#7A6030', base: '#B08E50' }
+};
+
+async function initLinkPickerMode() {
     if (window.linkPickerState.active) {
         console.log("Link picker already active");
         return;
@@ -229,12 +421,23 @@ function initLinkPickerMode() {
     window.linkPickerState.active = true;
     window.linkPickerState.selectedLinks = new Set();
     window.linkPickerState.selectedElements = new Set();
+    window.linkPickerState.lastSelectedElement = null;
+
+    // Read accent color from storage
+    let accentColors = ACCENT_COLORS.sage;
+    try {
+        const data = await browser.storage.sync.get('popupAccent');
+        const accent = data.popupAccent || 'sage';
+        accentColors = ACCENT_COLORS[accent] || ACCENT_COLORS.sage;
+    } catch (e) { /* use default */ }
+
+    window.linkPickerState.accentColors = accentColors;
 
     // Inject CSS styles
-    injectLinkPickerStyles();
+    injectLinkPickerStyles(accentColors);
 
     // Create control panel
-    createControlPanel();
+    createControlPanel(accentColors);
 
     // Add event listeners
     setupLinkPickerEventListeners();
@@ -242,7 +445,20 @@ function initLinkPickerMode() {
     console.log("Link picker mode activated");
 }
 
-function injectLinkPickerStyles() {
+function injectLinkPickerStyles(colors) {
+    const base = colors.base;
+    const dark = colors.dark;
+    const darker = colors.darker;
+    // Extract RGB from hex for rgba usage
+    const hexToRgb = (hex) => {
+        const r = parseInt(hex.slice(1,3), 16);
+        const g = parseInt(hex.slice(3,5), 16);
+        const b = parseInt(hex.slice(5,7), 16);
+        return `${r}, ${g}, ${b}`;
+    };
+    const baseRgb = hexToRgb(base);
+    const darkRgb = hexToRgb(dark);
+
     const styles = `
         /* Link Picker Overlay */
         .marksnip-link-picker-overlay {
@@ -251,97 +467,112 @@ function injectLinkPickerStyles() {
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0, 0, 0, 0.3);
+            background: rgba(0, 0, 0, 0.25);
             z-index: 999998;
             pointer-events: none;
         }
 
         /* Highlighted element */
         .marksnip-link-picker-highlight {
-            outline: 3px solid #3b82f6 !important;
-            outline-offset: 2px !important;
+            outline: 2px solid ${base} !important;
+            outline-offset: 3px !important;
             cursor: pointer !important;
             position: relative !important;
-            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2) !important;
+            box-shadow: 0 0 0 5px rgba(${baseRgb}, 0.18) !important;
+            transition: outline 100ms ease, box-shadow 100ms ease !important;
         }
 
-        /* Selected element indicator */
+        /* Selected element */
         .marksnip-link-picker-selected {
-            outline: 3px solid #10b981 !important;
-            outline-offset: 2px !important;
-            box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2) !important;
+            outline: 2px solid ${dark} !important;
+            outline-offset: 3px !important;
+            box-shadow: 0 0 0 5px rgba(${darkRgb}, 0.18) !important;
         }
 
         .marksnip-link-picker-selected::after {
             content: '✓';
             position: absolute;
-            top: -12px;
-            right: -12px;
-            width: 24px;
-            height: 24px;
-            background: #10b981;
+            top: -10px;
+            right: -10px;
+            width: 20px;
+            height: 20px;
+            background: ${dark};
             color: white;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: bold;
-            font-size: 16px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            font-size: 13px;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
             z-index: 999999;
         }
 
         /* Tooltip */
         .marksnip-link-picker-tooltip {
-            position: absolute;
-            background: rgba(0, 0, 0, 0.9);
-            color: white;
-            padding: 8px 12px;
+            position: fixed;
+            background: #292524;
+            color: #FAFAF9;
+            padding: 6px 11px;
             border-radius: 6px;
-            font-size: 13px;
+            font-size: 12px;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             pointer-events: none;
             z-index: 1000000;
             white-space: nowrap;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+            letter-spacing: 0.01em;
         }
 
-        /* Control Panel */
+        /* Control Panel — matches popup header gradient */
         .marksnip-link-picker-panel {
             position: fixed;
             bottom: 24px;
             right: 24px;
-            background: white;
+            background: linear-gradient(150deg, ${darker} 0%, ${dark} 100%);
             border-radius: 12px;
-            padding: 16px 20px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            padding: 18px 20px 16px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.15);
             z-index: 1000001;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            min-width: 280px;
-            border: 1px solid rgba(0, 0, 0, 0.1);
+            min-width: 240px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            /* GPU layer — prevents compositing glitches during animation */
+            transform: translateZ(0);
+            will-change: transform, opacity;
+            animation: marksnip-slideUp 240ms ease-out both;
         }
 
         .marksnip-link-picker-panel-title {
-            font-size: 14px;
+            font-size: 12px;
             font-weight: 600;
-            color: #1f2937;
-            margin-bottom: 12px;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 3px;
             text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
         }
 
         .marksnip-link-picker-panel-info {
-            font-size: 13px;
-            color: #6b7280;
-            margin-bottom: 12px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.55);
+            margin-bottom: 14px;
             text-align: center;
         }
 
         .marksnip-link-picker-panel-count {
-            font-size: 24px;
+            font-size: 28px;
             font-weight: 700;
-            color: #3b82f6;
+            color: #ffffff;
             text-align: center;
-            margin-bottom: 16px;
+            margin-bottom: 14px;
+            display: block;
+            transform-origin: center;
+            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .marksnip-link-picker-panel-count.marksnip-bump {
+            animation: marksnip-countBump 220ms ease-out both;
         }
 
         .marksnip-link-picker-panel-buttons {
@@ -351,66 +582,101 @@ function injectLinkPickerStyles() {
 
         .marksnip-link-picker-btn {
             flex: 1;
-            padding: 10px 16px;
-            border: none;
+            padding: 9px 14px;
             border-radius: 8px;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.2s;
             font-family: inherit;
+            /* No transition on transform during pulse/slide — prevents conflict */
+            transition: background 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
         }
 
+        /* Done — white pill on accent: clean contrast */
         .marksnip-link-picker-btn-done {
-            background: #3b82f6;
-            color: white;
+            background: rgba(255, 255, 255, 0.95);
+            color: ${darker};
+            border: 1px solid rgba(255, 255, 255, 0.4);
         }
 
         .marksnip-link-picker-btn-done:hover {
-            background: #2563eb;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+            background: ${base};
+            color: white;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
         }
 
+        .marksnip-link-picker-btn-done:active {
+            background: ${dark};
+            color: white;
+            box-shadow: none;
+        }
+
+        .marksnip-link-picker-btn-done.marksnip-pulse {
+            animation: marksnip-donePulse 380ms ease-out both;
+        }
+
+        /* Cancel — ghost on green */
         .marksnip-link-picker-btn-cancel {
-            background: #f3f4f6;
-            color: #6b7280;
+            background: rgba(255, 255, 255, 0.12);
+            color: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.18);
         }
 
         .marksnip-link-picker-btn-cancel:hover {
-            background: #e5e7eb;
-            color: #374151;
+            background: rgba(255, 255, 255, 0.2);
+            color: #ffffff;
         }
 
         .marksnip-link-picker-instructions {
-            font-size: 12px;
-            color: #9ca3af;
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.4);
             text-align: center;
             margin-top: 12px;
-            line-height: 1.5;
+            line-height: 1.6;
         }
 
-        /* Animations */
+        /* Click ripple */
+        .marksnip-click-ripple {
+            position: fixed;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 1000002;
+            transform: scale(0);
+            animation: marksnip-rippleOut 480ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+
+        /* Keyframes */
+        @keyframes marksnip-slideUp {
+            from { opacity: 0; transform: translateZ(0) translateY(16px); }
+            to   { opacity: 1; transform: translateZ(0) translateY(0); }
+        }
+
+        @keyframes marksnip-rippleOut {
+            0%   { transform: scale(0);   opacity: 0.7; }
+            100% { transform: scale(1);   opacity: 0; }
+        }
+
+        @keyframes marksnip-donePulse {
+            0%   { transform: scale(1); }
+            40%  { transform: scale(1.1); }
+            70%  { transform: scale(0.97); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes marksnip-countBump {
+            0%   { transform: scale(1); }
+            50%  { transform: scale(1.25); }
+            100% { transform: scale(1); }
+        }
+
         @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translate(-50%, -50%) scale(0.95);
-            }
-            to {
-                opacity: 1;
-                transform: translate(-50%, -50%) scale(1);
-            }
+            from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+            to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
         }
 
         @keyframes fadeOut {
-            from {
-                opacity: 1;
-                transform: translate(-50%, -50%) scale(1);
-            }
-            to {
-                opacity: 0;
-                transform: translate(-50%, -50%) scale(0.95);
-            }
+            from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            to   { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
         }
     `;
 
@@ -425,7 +691,7 @@ function injectLinkPickerStyles() {
     document.body.appendChild(overlay);
 }
 
-function createControlPanel() {
+function createControlPanel(colors) {
     const panel = document.createElement('div');
     panel.className = 'marksnip-link-picker-panel';
     panel.id = 'marksnip-link-picker-panel';
@@ -441,6 +707,14 @@ function createControlPanel() {
                 Done
             </button>
         </div>
+        <div class="marksnip-link-picker-panel-buttons" style="margin-top: 8px;">
+            <button class="marksnip-link-picker-btn marksnip-link-picker-btn-cancel" id="marksnip-link-picker-undo" title="Undo last selection">
+                Undo
+            </button>
+            <button class="marksnip-link-picker-btn marksnip-link-picker-btn-cancel" id="marksnip-link-picker-clear" title="Deselect all elements">
+                Clear All
+            </button>
+        </div>
         <div class="marksnip-link-picker-instructions">
             Click elements to select links<br>
             Press ESC to cancel
@@ -452,6 +726,8 @@ function createControlPanel() {
     // Add button event listeners
     document.getElementById('marksnip-link-picker-done').addEventListener('click', finishLinkPicker);
     document.getElementById('marksnip-link-picker-cancel').addEventListener('click', cancelLinkPicker);
+    document.getElementById('marksnip-link-picker-undo').addEventListener('click', undoLastSelection);
+    document.getElementById('marksnip-link-picker-clear').addEventListener('click', clearAllSelections);
 }
 
 function setupLinkPickerEventListeners() {
@@ -486,11 +762,11 @@ function setupLinkPickerEventListeners() {
 
         const element = e.target;
 
-        // Toggle selection
+        // Toggle selection — pass coords for the ripple
         if (window.linkPickerState.selectedElements.has(element)) {
-            deselectElement(element);
+            deselectElement(element, e.clientX, e.clientY);
         } else {
-            selectElement(element);
+            selectElement(element, e.clientX, e.clientY);
         }
     };
 
@@ -557,10 +833,27 @@ function removeTooltip() {
     }
 }
 
-function selectElement(element) {
+function spawnClickRipple(x, y, color) {
+    const size = 56;
+    const ripple = document.createElement('div');
+    ripple.className = 'marksnip-click-ripple';
+    ripple.style.cssText = [
+        `width: ${size}px`,
+        `height: ${size}px`,
+        `left: ${x - size / 2}px`,
+        `top: ${y - size / 2}px`,
+        `background: ${color}`,
+    ].join(';');
+    document.body.appendChild(ripple);
+    ripple.addEventListener('animationend', () => ripple.remove(), { once: true });
+}
+
+function selectElement(element, clientX = 0, clientY = 0) {
     const links = extractLinksFromElement(element);
 
     if (links.length === 0) {
+        // Still ripple — user clicked, just no links here
+        spawnClickRipple(clientX, clientY, 'rgba(168, 162, 158, 0.45)');
         return;
     }
 
@@ -569,13 +862,19 @@ function selectElement(element) {
 
     // Mark element as selected
     window.linkPickerState.selectedElements.add(element);
+    window.linkPickerState.lastSelectedElement = element;
     element.classList.remove('marksnip-link-picker-highlight');
     element.classList.add('marksnip-link-picker-selected');
+
+    // Accent-colored ripple at cursor
+    const ac = window.linkPickerState.accentColors || ACCENT_COLORS.sage;
+    const hexToRgbInline = (hex) => `${parseInt(hex.slice(1,3),16)}, ${parseInt(hex.slice(3,5),16)}, ${parseInt(hex.slice(5,7),16)}`;
+    spawnClickRipple(clientX, clientY, `rgba(${hexToRgbInline(ac.base)}, 0.4)`);
 
     updateLinkCount();
 }
 
-function deselectElement(element) {
+function deselectElement(element, clientX = 0, clientY = 0) {
     const links = extractLinksFromElement(element);
 
     // Remove links from set
@@ -585,7 +884,26 @@ function deselectElement(element) {
     window.linkPickerState.selectedElements.delete(element);
     element.classList.remove('marksnip-link-picker-selected');
 
+    // Stone ripple (deselect)
+    spawnClickRipple(clientX, clientY, 'rgba(168, 162, 158, 0.45)');
+
     updateLinkCount();
+}
+
+function undoLastSelection() {
+    const last = window.linkPickerState.lastSelectedElement;
+    if (last && window.linkPickerState.selectedElements.has(last)) {
+        deselectElement(last);
+        window.linkPickerState.lastSelectedElement = null;
+    }
+}
+
+function clearAllSelections() {
+    const elements = Array.from(window.linkPickerState.selectedElements);
+    for (const el of elements) {
+        deselectElement(el);
+    }
+    window.linkPickerState.lastSelectedElement = null;
 }
 
 function extractLinksFromElement(element) {
@@ -621,8 +939,27 @@ function extractLinksFromElement(element) {
 function updateLinkCount() {
     const count = window.linkPickerState.selectedLinks.size;
     const countElement = document.getElementById('marksnip-link-count');
+    const doneBtn = document.getElementById('marksnip-link-picker-done');
+
     if (countElement) {
         countElement.textContent = `${count} link${count !== 1 ? 's' : ''}`;
+
+        // Bump animation on count — retrigger by removing/re-adding the class
+        countElement.classList.remove('marksnip-bump');
+        // Force reflow so the browser registers the class removal
+        void countElement.offsetWidth;
+        countElement.classList.add('marksnip-bump');
+    }
+
+    if (doneBtn) {
+        if (count === 1) {
+            // First link selected — pulse the Done button to guide the user
+            doneBtn.classList.remove('marksnip-pulse');
+            void doneBtn.offsetWidth;
+            doneBtn.classList.add('marksnip-pulse');
+        } else if (count === 0) {
+            doneBtn.classList.remove('marksnip-pulse');
+        }
     }
 }
 
@@ -661,28 +998,30 @@ function finishLinkPicker() {
 }
 
 function showSuccessNotification(linkCount) {
+    const ac = window.linkPickerState.accentColors || ACCENT_COLORS.sage;
     const notification = document.createElement('div');
     notification.style.cssText = `
         position: fixed;
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        background: white;
+        background: linear-gradient(150deg, ${ac.darker} 0%, ${ac.dark} 100%);
         padding: 32px 48px;
         border-radius: 16px;
         box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
         z-index: 10000000;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         text-align: center;
+        border: 1px solid rgba(255, 255, 255, 0.12);
         animation: fadeIn 0.3s ease-out;
     `;
     notification.innerHTML = `
-        <div style="font-size: 48px; margin-bottom: 16px;">✓</div>
-        <div style="font-size: 18px; font-weight: 600; color: #1f2937; margin-bottom: 8px;">
+        <div style="font-size: 44px; margin-bottom: 14px; line-height: 1;">✓</div>
+        <div style="font-size: 18px; font-weight: 600; color: #ffffff; margin-bottom: 8px;">
             ${linkCount} link${linkCount !== 1 ? 's' : ''} collected!
         </div>
-        <div style="font-size: 14px; color: #6b7280;">
-            Reopen the extension to see them in the batch processor
+        <div style="font-size: 13px; color: rgba(255, 255, 255, 0.6);">
+            Reopen the extension to add them to the batch processor
         </div>
     `;
     document.body.appendChild(notification);
@@ -754,7 +1093,9 @@ function cleanupLinkPicker() {
         hoveredElement: null,
         controlPanel: null,
         styleElement: null,
-        handlers: {}
+        handlers: {},
+        lastSelectedElement: null,
+        accentColors: null
     };
 
     console.log("Link picker mode deactivated");
