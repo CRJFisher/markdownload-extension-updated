@@ -1041,7 +1041,12 @@ async function handleLibraryExportIndividualRequest(message, sender) {
   for (const file of files) {
     try {
       const title = file.filename.replace(/\.md$/i, '');
-      await downloadMarkdown(file.content, title, fallbackTabId, {}, options.mdClipsFolder || '');
+      let folder = options.mdClipsFolder || '';
+      if (options.pageSubfolders && title) {
+        if (folder && !folder.endsWith('/')) folder += '/';
+        folder = folder + generateValidFileName(title, options.disallowedChars) + '/';
+      }
+      await downloadMarkdown(file.content, title, fallbackTabId, {}, folder);
       exported++;
     } catch (err) {
       console.error(`[Library] Failed to export individual file "${file.filename}":`, err);

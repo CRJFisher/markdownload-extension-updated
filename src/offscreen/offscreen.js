@@ -1731,6 +1731,13 @@ async function formatMdClipsFolder(article, providedOptions = null) {
     if (!mdClipsFolder.endsWith('/')) mdClipsFolder += '/';
   }
 
+  if (options.pageSubfolders && article.title) {
+    const safeTitle = generateValidFileName(article.title, options.disallowedChars);
+    if (safeTitle) {
+      mdClipsFolder = mdClipsFolder + safeTitle + '/';
+    }
+  }
+
   return mdClipsFolder;
 }
 
