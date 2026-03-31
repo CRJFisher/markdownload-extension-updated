@@ -26,7 +26,8 @@ let templatePreviewListenersBound = false;
 	const POPUP_THEME_CACHE_KEY = 'marksnip-popup-theme-cache-v1';
 	const SITE_RULE_BOOLEAN_FIELD_IDS = {
 	    includeTemplate: 'siteRuleIncludeTemplate',
-	    downloadImages: 'siteRuleDownloadImages'
+	    downloadImages: 'siteRuleDownloadImages',
+	    pageSubfolders: 'siteRulePageSubfolders'
 	};
 	const SITE_RULE_ENUM_FIELD_IDS = {
 	    imageStyle: 'siteRuleImageStyle',
@@ -48,6 +49,7 @@ let templatePreviewListenersBound = false;
 	const SITE_RULE_OVERRIDE_LABELS = {
 	    includeTemplate: 'Template',
 	    downloadImages: 'Download Images',
+	    pageSubfolders: 'Page Subfolders',
 	    frontmatter: 'Frontmatter',
 	    backmatter: 'Backmatter',
 	    title: 'Title',
@@ -1080,6 +1082,7 @@ const saveOptions = e => {
         downloadImages: document.querySelector("[name='downloadImages']").checked,
         imagePrefix: document.querySelector("[name='imagePrefix']").value,
         mdClipsFolder: document.querySelector("[name='mdClipsFolder']").value,
+        pageSubfolders: document.querySelector("[name='pageSubfolders']").checked,
         defaultExportType: getCheckedValue(document.querySelectorAll("input[name='defaultExportType']")) || 'markdown',
         turndownEscape: document.querySelector("[name='turndownEscape']").checked,
         hashtagHandling: getCheckedValue(document.querySelectorAll("input[name='hashtagHandling']")),
@@ -1300,6 +1303,7 @@ const setCurrentChoice = result => {
     document.querySelector("[name='downloadImages']").checked = options.downloadImages;
     document.querySelector("[name='imagePrefix']").value = options.imagePrefix;
     document.querySelector("[name='mdClipsFolder']").value = result.mdClipsFolder;
+    document.querySelector("[name='pageSubfolders']").checked = options.pageSubfolders;
     document.querySelector("[name='turndownEscape']").checked = options.turndownEscape;
     document.querySelector("[name='contextMenus']").checked = options.contextMenus;
     document.querySelector("[name='batchProcessingEnabled']").checked = options.batchProcessingEnabled !== false;
@@ -1469,6 +1473,7 @@ const refreshElements = () => {
     });
 
     show(document.getElementById("mdClipsFolder"), options.downloadMode == 'downloadsApi');
+    show(document.getElementById("pageSubfolders-container"), options.downloadMode == 'downloadsApi');
 
     show(document.getElementById("linkReferenceStyle"), (options.linkStyle == "referenced"));
 

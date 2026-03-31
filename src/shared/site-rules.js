@@ -6,7 +6,7 @@
 
   root.markSnipSiteRules = factory(root);
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
-  const BOOLEAN_OVERRIDE_KEYS = ['includeTemplate', 'downloadImages'];
+  const BOOLEAN_OVERRIDE_KEYS = ['includeTemplate', 'downloadImages', 'pageSubfolders'];
   const TEXT_OVERRIDE_KEYS = ['frontmatter', 'backmatter', 'title', 'imagePrefix', 'mdClipsFolder'];
   const ENUM_OVERRIDE_VALUES = {
     imageStyle: new Set(['originalSource', 'noImage', 'markdown', 'base64', 'obsidian', 'obsidian-nofolder']),

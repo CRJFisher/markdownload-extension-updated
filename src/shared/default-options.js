@@ -27,6 +27,7 @@ const defaultOptions = {
   downloadImages: false,
   imagePrefix: '{pageTitle}/',
   mdClipsFolder: null,
+  pageSubfolders: false,
   disallowedChars: '[]#^',
   downloadMode: 'downloadsApi',
   defaultExportType: 'markdown',

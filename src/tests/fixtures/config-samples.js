@@ -136,6 +136,13 @@ tags: [{keywords}]
     downloadImages: true
   },
 
+  // Page subfolder configuration
+  withPageSubfolders: {
+    mdClipsFolder: 'clippings',
+    pageSubfolders: true,
+    downloadImages: true
+  },
+
   // Complete configuration with all options
   fullConfig: {
     headingStyle: 'atx',
@@ -161,6 +168,7 @@ clipped: {date:YYYY-MM-DD}
     downloadImages: true,
     imagePrefix: 'img-',
     mdClipsFolder: 'markdown-clips',
+    pageSubfolders: false,
     disallowedChars: '[]#^',
     turndownEscape: true,
     contextMenus: true

@@ -301,6 +301,22 @@
                     </div>
                 </div>
 
+                <!-- Page subfolders -->
+                <div class="setting-card" id="pageSubfolders-container"
+                    data-search-keywords="page subfolder,subfolders,page folder,organize,per page"
+                    data-setting-key="pageSubfolders">
+                    <div class="toggle-row">
+                        <div class="toggle-info">
+                            <label class="toggle-label-text" for="pageSubfolders">Save each page in its own sub-folder</label>
+                            <p class="toggle-hint">Creates a sub-folder named after the page title inside the clips folder, so each page's markdown and images are kept together. If the image prefix also contains the page title (the default), consider changing it to <code>images/</code> to avoid double-nesting.</p>
+                        </div>
+                        <label class="toggle-switch">
+                            <input name="pageSubfolders" id="pageSubfolders" type="checkbox" />
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
                 <!-- Disallowed chars -->
                 <div class="setting-card" data-setting-key="disallowedChars">
                     <h3 class="card-title">Disallowed characters</h3>
@@ -1439,6 +1455,14 @@ const helloWorld = () => {
 	                                <div class="site-rule-field">
 	                                    <label class="input-label" for="siteRuleDownloadImages">Download Images</label>
 	                                    <select id="siteRuleDownloadImages" class="text-input site-rule-select">
+	                                        <option value="inherit">Inherit</option>
+	                                        <option value="true">On</option>
+	                                        <option value="false">Off</option>
+	                                    </select>
+	                                </div>
+	                                <div class="site-rule-field">
+	                                    <label class="input-label" for="siteRulePageSubfolders">Page Subfolders</label>
+	                                    <select id="siteRulePageSubfolders" class="text-input site-rule-select">
 	                                        <option value="inherit">Inherit</option>
 	                                        <option value="true">On</option>
 	                                        <option value="false">Off</option>
