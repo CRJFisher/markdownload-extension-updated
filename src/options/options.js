@@ -26,7 +26,8 @@ let templatePreviewListenersBound = false;
 	const POPUP_THEME_CACHE_KEY = 'marksnip-popup-theme-cache-v1';
 	const SITE_RULE_BOOLEAN_FIELD_IDS = {
 	    includeTemplate: 'siteRuleIncludeTemplate',
-	    downloadImages: 'siteRuleDownloadImages'
+	    downloadImages: 'siteRuleDownloadImages',
+	    pageSubfolders: 'siteRulePageSubfolders'
 	};
 	const SITE_RULE_ENUM_FIELD_IDS = {
 	    imageStyle: 'siteRuleImageStyle',
@@ -48,6 +49,7 @@ let templatePreviewListenersBound = false;
 	const SITE_RULE_OVERRIDE_LABELS = {
 	    includeTemplate: 'Template',
 	    downloadImages: 'Download Images',
+	    pageSubfolders: 'Page Subfolders',
 	    frontmatter: 'Frontmatter',
 	    backmatter: 'Backmatter',
 	    title: 'Title',
